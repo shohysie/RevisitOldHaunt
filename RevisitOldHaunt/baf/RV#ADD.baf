@@ -1,0 +1,7 @@
+IF
+	!Global("RV#%areacode%","GLOBAL",1)
+THEN
+	RESPONSE #100
+		SetGlobal("RV#%areacode%","GLOBAL",1)
+		Continue()
+END

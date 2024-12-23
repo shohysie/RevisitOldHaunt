@@ -1,0 +1,8 @@
+IF
+	Global("RV#%areacode%","GLOBAL",2)
+THEN
+	RESPONSE #100
+		DestroySelf()
+		StartCutSceneMode()
+		StartCutScene("RV#CS%areaindex%")
+END

@@ -1,0 +1,381 @@
+BACKUP ~RevisitOldHaunt/backup~
+AUTHOR ~shohy@126.com~
+
+VERSION ~v0.1~
+AUTO_EVAL_STRINGS
+
+README ~%MOD_FOLDER%/README.%LANGUAGE%.txt~
+AUTO_TRA ~%MOD_FOLDER%/tra/%s~
+
+LANGUAGE  ~American English~	~english~	~RevisitOldHaunt/tra/english/game.tra~	~RevisitOldHaunt/tra/english/setup.tra~
+LANGUAGE  ~Simplified Chinese~	~schinese~	~RevisitOldHaunt/tra/schinese/game.tra~	~RevisitOldHaunt/tra/schinese/setup.tra~
+
+BEGIN @1
+REQUIRE_PREDICATE GAME_IS ~bgee bg2ee eet~ @2	//版本不对
+REQUIRE_PREDICATE FILE_EXISTS_IN_GAME ~WISH01.cre~ @3	//没有对应spl
+
+//LIMITEDWISH	WISH.EFF	WISH01.CRE	wish.dlg
+//WISH	WISH2.EFF	WISH02.CRE	wish25.dlg
+
+COPY_EXISTING ~WISH01.cre~ ~override~
+	READ_ASCII 0x248 wishbcs1
+	READ_ASCII 0x2cc wishdlg1
+BUT_ONLY
+
+ACTION_IF FILE_EXISTS_IN_GAME ~WISH02.cre~ THEN BEGIN
+	COPY_EXISTING ~WISH02.cre~ ~override~
+		READ_ASCII 0x248 wishbcs2
+		READ_ASCII 0x2cc wishdlg2
+	BUT_ONLY
+END	
+
+//做出区域和名称列表arealist.2da
+COPY_EXISTING_REGEXP GLOB ~.*\.WMP~ ~override~
+	READ_ASCII 0x00 signature (4)	//WMAP
+	//PATCH_PRINT ~%signature%~
+	PATCH_IF (~%signature%~ STRING_COMPARE ~WMAP~ = 0) BEGIN
+		READ_LONG 0x0c offsetmap	//0x10
+		//PATCH_PRINT ~%offsetmap%~
+		READ_LONG (offsetmap + 0x20) areas	//0x30
+		//PATCH_PRINT ~%areas%~
+		PATCH_IF areas > 0 BEGIN
+			READ_LONG (offsetmap + 0x24) offsetareas	//地址0x34读出0xc8
+			FOR (index = 0 ; index < areas ; ++index) BEGIN
+				READ_ASCII (offsetareas + 0xF0 * index) areacode
+				READ_LONG (offsetareas + 0xF0 * index + 0x40) areastring
+				//PATCH_PRINT ~checking %areacode% %areastring%~
+				PATCH_IF (RESOURCE_CONTAINS ~BGEE.LUA~ ~%areacode%~) & (RESOURCE_CONTAINS ~mastarea.2da~ ~%areacode%~) BEGIN
+					PATCH_IF (NOT FILE_CONTAINS_EVALUATED (~%MOD_FOLDER%/2da/arealist.2da~ ~%areacode%~)) & ((STRING_LENGTH ~%areacode%~) > 3) BEGIN
+						//PATCH_PRINT ~%areacode% %areastring% passed~
+						INNER_ACTION BEGIN
+							APPEND_OUTER ~%MOD_FOLDER%/2da/arealist.2da~ ~%areacode% %areastring%~
+						END
+					END
+				END
+			END
+		END
+	END
+BUT_ONLY
+
+//找到各地图空余位置
+COPY ~%MOD_FOLDER%/2da/arealist.2da~ ~override~
+	COUNT_2DA_ROWS 2 areasmax
+	//PATCH_PRINT ~%areasmax%~
+	FOR (areaindex = 1 ; (areaindex < areasmax)&(areaindex < 999) ; ++areaindex) BEGIN
+		READ_2DA_ENTRY areaindex 0 2 areacode
+		READ_2DA_ENTRY areaindex 1 2 areastring
+		//PATCH_PRINT ~%areacode%~
+		//PATCH_PRINT ~%areastring%~
+		INNER_ACTION BEGIN
+			COPY_EXISTING ~%areacode%.are~ ~override~
+				READ_ASCII 0x94 areabcs
+				PATCH_IF ~%areabcs%~ STRING_CONTAINS_REGEXP "[a-zA-Z0-9]" BEGIN
+					WRITE_ASCII 0x94 ~%areacode%~
+					SPRINT areabcs ~%areacode%~
+				END
+				SET LocationX = 50
+				SET LocationY = 50
+				READ_LONG 0x6c enrances
+				//PATCH_PRINT ~enrance=%enrances%~
+				PATCH_IF enrances > 0 BEGIN
+					READ_LONG 0x68 offsetenrances
+					READ_SHORT (offsetenrances + 0x20) LocationX
+					READ_SHORT (offsetenrances + 0x22) LocationY
+				END ELSE BEGIN
+					READ_SHORT 0x74 containers
+					//PATCH_PRINT ~container=%containers%~
+					PATCH_IF containers > 0 BEGIN
+						READ_LONG 0x70 offsetcontainers
+						READ_SHORT (offsetcontainers + 0x20) LocationX
+						READ_SHORT (offsetcontainers + 0x22) LocationY
+					END ELSE BEGIN
+						READ_SHORT 0x58 actors
+						//PATCH_PRINT ~actor=%actors%~
+						PATCH_IF actors > 0 BEGIN
+							READ_LONG 0x54 offsetactors
+							READ_SHORT (offsetactors + 0x20) LocationX
+							READ_SHORT (offsetactors + 0x22) LocationY
+						END
+					END
+				END
+			//PATCH_PRINT ~%LocationX% %LocationY%~
+			BUT_ONLY
+		END
+		INNER_ACTION BEGIN
+		//区域对应变量为2时StartCutScene
+			EXTEND_TOP ~%wishbcs1%.bcs~ ~%MOD_FOLDER%/baf/SEND.baf~ EVALUATE_BUFFER
+			ACTION_IF (~%wishbcs1%~ STRING_COMPARE_CASE ~%wishbcs2%~ != 0) & FILE_EXISTS_IN_GAME ~WISH02.cre~ BEGIN	//相等时STRING_COMPARE取0
+				EXTEND_TOP ~%wishbcs2%.bcs~ ~%MOD_FOLDER%/baf/SEND.baf~ EVALUATE_BUFFER
+			END
+		END
+		INNER_ACTION BEGIN
+		//处理CutScene的名称和内容
+			COMPILE EVALUATE_BUFFER ~%MOD_FOLDER%/baf/RV#CS.baf~
+			MOVE ~override/RV#CS.bcs~ ~override/RV#CS%areaindex%.bcs~
+		END
+		INNER_ACTION BEGIN
+		//处理区域脚本，添加变量
+			ACTION_IF FILE_EXISTS_IN_GAME ~%areabcs%.bcs~ BEGIN
+				EXTEND_TOP ~%areabcs%.bcs~ ~%MOD_FOLDER%/baf/RV#ADD.baf~ EVALUATE_BUFFER
+			END ELSE BEGIN
+				COMPILE EVALUATE_BUFFER ~%MOD_FOLDER%/baf/RV#ADD.baf~
+				MOVE ~override/RV#ADD.bcs~ ~override/%areabcs%.bcs~
+			END
+		END
+	END
+BUT_ONLY
+
+/*
+安姆	ARXXXX
+龙矛	BDXXXX
+剑湾	BGXXXX（EET）		ARXXXX（龙矛，EE1）
+冰风谷1	idXXXX
+冰风谷2	IWXXXX
+绝冬城	NWXXXX
+
+根据游戏判断大选项
+如果游戏是EE，剑湾1	如果有BDXXXX，+龙刃堡2
+如果游戏是EE2，安姆3	如果有NWXXXX，+绝冬城6
+如果游戏是EET，剑湾+龙刃堡+安姆
+如果有idXXXX，+冰风谷一4
+如果有IWXXXX，+冰风谷二5
+如果有NWXXXX，+绝冬城6
+*/
+//具体区域dlg处理
+ACTION_IF GAME_IS bgee THEN BEGIN
+	COPY ~%MOD_FOLDER%/2da/arealist.2da~  ~override~
+		COUNT_2DA_ROWS 2 areaamount
+		FOR (areaindex = 1; areaindex < areaamount; ++areaindex) BEGIN
+			READ_2DA_ENTRY areaindex 0 2 areacode
+			READ_2DA_ENTRY areaindex 1 2 areastring
+			//剑湾地域
+			PATCH_IF ((~%areacode%~ STRING_CONTAINS_REGEXP ~^AR[0-9]+~) == 0) BEGIN
+				INNER_ACTION BEGIN
+					COPY ~%MOD_FOLDER%/dlg/ADD1.d~ ~%MOD_FOLDER%/dlg/ADD1.d~
+					REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~
+					~~~~~IF ~Global("RV#%areacode%","GLOBAL",1)~ THEN REPLY #%areastring% DO ~SetGlobal("RV#%areacode%","GLOBAL",2)~ EXIT
+IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
+				END
+			END ELSE BEGIN
+				//龙刃堡
+				PATCH_IF ((~%areacode%~ STRING_CONTAINS_REGEXP ~^BD[0-9]+~) == 0) BEGIN
+					INNER_ACTION BEGIN
+						COPY ~%MOD_FOLDER%/dlg/ADD2.d~ ~%MOD_FOLDER%/dlg/ADD2.d~
+						REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~
+						~~~~~IF ~Global("RV#%areacode%","GLOBAL",1)~ THEN REPLY #%areastring% DO ~SetGlobal("RV#%areacode%","GLOBAL",2)~ EXIT
+IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
+					END
+				END ELSE BEGIN
+					//其它
+					INNER_ACTION BEGIN
+					COPY ~%MOD_FOLDER%/dlg/ADD9.d~ ~%MOD_FOLDER%/dlg/ADD9.d~
+					REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~
+					~~~~~IF ~Global("RV#%areacode%","GLOBAL",1)~ THEN REPLY #%areastring% DO ~SetGlobal("RV#%areacode%","GLOBAL",2)~ EXIT
+IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
+					END			
+				END
+			END
+		END
+	BUT_ONLY
+END
+ACTION_IF GAME_IS bg2ee THEN BEGIN
+	COPY ~%MOD_FOLDER%/2da/arealist.2da~  ~override~
+		COUNT_2DA_ROWS 2 areaamount
+		//PATCH_PRINT ~total %areaamount% areas~
+		FOR (areaindex = 1; areaindex < areaamount; ++areaindex) BEGIN
+			READ_2DA_ENTRY areaindex 0 2 areacode
+			READ_2DA_ENTRY areaindex 1 2 areastring
+			//PATCH_PRINT ~%areacode% %areastring%~
+			//安姆地域
+			PATCH_IF ((~%areacode%~ STRING_CONTAINS_REGEXP ~^AR[0-9]+~) == 0) BEGIN
+				//PATCH_PRINT ~ANM%areacode%~
+				INNER_ACTION BEGIN
+					COPY ~%MOD_FOLDER%/dlg/ADD3.d~ ~%MOD_FOLDER%/dlg/ADD3.d~
+					REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~
+					~~~~~IF ~Global("RV#%areacode%","GLOBAL",1)~ THEN REPLY #%areastring% DO ~SetGlobal("RV#%areacode%","GLOBAL",2)~ EXIT
+IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
+				END
+			END ELSE BEGIN
+				//绝冬城
+				PATCH_IF ((~%areacode%~ STRING_CONTAINS_REGEXP ~^NW[0-9]+~) == 0) BEGIN
+					//PATCH_PRINT ~NWN%areacode%~
+					INNER_ACTION BEGIN
+						COPY ~%MOD_FOLDER%/dlg/ADD6.d~ ~%MOD_FOLDER%/dlg/ADD6.d~
+						REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~
+						~~~~~IF ~Global("RV#%areacode%","GLOBAL",1)~ THEN REPLY #%areastring% DO ~SetGlobal("RV#%areacode%","GLOBAL",2)~ EXIT
+IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
+					END
+				END ELSE BEGIN
+					//其它
+					//PATCH_PRINT ~OTHER%areacode%~
+					INNER_ACTION BEGIN
+						COPY ~%MOD_FOLDER%/dlg/ADD9.d~ ~%MOD_FOLDER%/dlg/ADD9.d~
+						REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~
+						~~~~~IF ~Global("RV#%areacode%","GLOBAL",1)~ THEN REPLY #%areastring% DO ~SetGlobal("RV#%areacode%","GLOBAL",2)~ EXIT
+IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
+					END
+				END
+			END
+		END
+	BUT_ONLY
+END
+ACTION_IF GAME_IS eet THEN BEGIN
+	COPY ~%MOD_FOLDER%/2da/arealist.2da~  ~override~
+		COUNT_2DA_ROWS 2 areaamount
+		FOR (areaindex = 1; areaindex < areaamount; ++areaindex) BEGIN
+			READ_2DA_ENTRY areaindex 0 2 areacode
+			READ_2DA_ENTRY areaindex 1 2 areastring
+			//剑湾地域
+			PATCH_IF ((~%areacode%~ STRING_CONTAINS_REGEXP ~^BG[0-9]+~) == 0) BEGIN
+				INNER_ACTION BEGIN
+					COPY ~%MOD_FOLDER%/dlg/ADD1.d~ ~%MOD_FOLDER%/dlg/ADD1.d~
+					REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~
+					~~~~~IF ~Global("RV#%areacode%","GLOBAL",1)~ THEN REPLY #%areastring% DO ~SetGlobal("RV#%areacode%","GLOBAL",2)~ EXIT
+IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
+				END
+			END ELSE BEGIN
+				//龙刃堡
+				PATCH_IF ((~%areacode%~ STRING_CONTAINS_REGEXP ~^BD[0-9]+~) == 0) BEGIN
+					INNER_ACTION BEGIN
+						COPY ~%MOD_FOLDER%/dlg/ADD2.d~ ~%MOD_FOLDER%/dlg/ADD2.d~
+						REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~
+						~~~~~IF ~Global("RV#%areacode%","GLOBAL",1)~ THEN REPLY #%areastring% DO ~SetGlobal("RV#%areacode%","GLOBAL",2)~ EXIT
+IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
+					END
+				END ELSE BEGIN
+					//安姆地域
+					PATCH_IF ((~%areacode%~ STRING_CONTAINS_REGEXP ~^AR[0-9]+~) == 0) BEGIN
+						INNER_ACTION BEGIN
+							COPY ~%MOD_FOLDER%/dlg/ADD3.d~ ~%MOD_FOLDER%/dlg/ADD3.d~
+							REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~
+							~~~~~IF ~Global("RV#%areacode%","GLOBAL",1)~ THEN REPLY #%areastring% DO ~SetGlobal("RV#%areacode%","GLOBAL",2)~ EXIT
+IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
+						END
+					END ELSE BEGIN
+						//冰风谷1
+						PATCH_IF ((~%areacode%~ STRING_CONTAINS_REGEXP ~^id[0-9]+~) == 0) BEGIN
+							INNER_ACTION BEGIN
+								COPY ~%MOD_FOLDER%/dlg/ADD4.d~ ~%MOD_FOLDER%/dlg/ADD4.d~
+								REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~
+								~~~~~IF ~Global("RV#%areacode%","GLOBAL",1)~ THEN REPLY #%areastring% DO ~SetGlobal("RV#%areacode%","GLOBAL",2)~ EXIT
+IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
+							END
+						END ELSE BEGIN
+							//冰风谷2
+							PATCH_IF ((~%areacode%~ STRING_CONTAINS_REGEXP ~^IW[0-9]+~) == 0) BEGIN
+								INNER_ACTION BEGIN
+									COPY ~%MOD_FOLDER%/dlg/ADD5.d~ ~%MOD_FOLDER%/dlg/ADD5.d~
+									REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~
+									~~~~~IF ~Global("RV#%areacode%","GLOBAL",1)~ THEN REPLY #%areastring% DO ~SetGlobal("RV#%areacode%","GLOBAL",2)~ EXIT
+IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
+								END
+							END ELSE BEGIN
+								//绝冬城
+								PATCH_IF ((~%areacode%~ STRING_CONTAINS_REGEXP ~^NW[0-9]+~) == 0) BEGIN
+									INNER_ACTION BEGIN
+										COPY ~%MOD_FOLDER%/dlg/ADD6.d~ ~%MOD_FOLDER%/dlg/ADD6.d~
+										REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~
+										~~~~~IF ~Global("RV#%areacode%","GLOBAL",1)~ THEN REPLY #%areastring% DO ~SetGlobal("RV#%areacode%","GLOBAL",2)~ EXIT
+IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
+									END
+								END ELSE BEGIN
+									//其它
+									INNER_ACTION BEGIN
+										COPY ~%MOD_FOLDER%/dlg/ADD9.d~ ~%MOD_FOLDER%/dlg/ADD9.d~
+										REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~
+										~~~~~IF ~Global("RV#%areacode%","GLOBAL",1)~ THEN REPLY #%areastring% DO ~SetGlobal("RV#%areacode%","GLOBAL",2)~ EXIT
+IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
+									END
+								END
+							END
+						END
+					END
+				END
+			END
+		END
+	BUT_ONLY
+END
+
+//主区域dlg处理并和细节区域dlg合并
+COPY ~%MOD_FOLDER%/dlg/ADD0.d~ ~%MOD_FOLDER%/dlg/ADD0.d~
+
+	PATCH_IF GAME_IS bgee THEN BEGIN
+		REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		 ~~~~~IF ~~ THEN REPLY @41 GOTO regiongo1	//去剑湾附近区域。
+IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		APPEND_FILE ~%MOD_FOLDER%/dlg/ADD1.d~
+		PATCH_IF FILE_EXISTS_IN_GAME ~BD2000.are~ THEN BEGIN
+			REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
+			 ~~~~~IF ~~ THEN REPLY @42 GOTO regiongo2	//去龙刃堡附近区域。
+IF ~~ THEN REPLY @40 GOTO 0~~~~~
+			APPEND_FILE ~%MOD_FOLDER%/dlg/ADD2.d~
+		END
+		REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		 ~~~~~IF ~~ THEN REPLY @49 GOTO regiongo9	//去其它区域。
+IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		APPEND_FILE ~%MOD_FOLDER%/dlg/ADD9.d~
+	END
+	
+	PATCH_IF GAME_IS bg2ee THEN BEGIN
+		REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		 ~~~~~IF ~~ THEN REPLY @43 GOTO regiongo3	//去安姆附近区域。
+IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		APPEND_FILE ~%MOD_FOLDER%/dlg/ADD3.d~
+		PATCH_IF FILE_EXISTS_IN_GAME ~NW2000.are~ THEN BEGIN
+			REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
+			 ~~~~~IF ~~ THEN REPLY @46 GOTO regiongo6	//去绝冬城附近区域。
+IF ~~ THEN REPLY @40 GOTO 0~~~~~
+			APPEND_FILE ~%MOD_FOLDER%/dlg/ADD6.d~
+		END
+		REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		 ~~~~~IF ~~ THEN REPLY @49 GOTO regiongo9	//去其它区域。
+IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		APPEND_FILE ~%MOD_FOLDER%/dlg/ADD9.d~
+	END
+	
+	PATCH_IF GAME_IS eet THEN BEGIN
+		REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		 ~~~~~IF ~~ THEN REPLY @41 GOTO regiongo1	//去剑湾附近区域。
+IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		APPEND_FILE ~%MOD_FOLDER%/dlg/ADD1.d~
+		PATCH_IF FILE_EXISTS_IN_GAME ~BD2000.are~ THEN BEGIN
+			REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
+			 ~~~~~IF ~~ THEN REPLY @42 GOTO regiongo2	//去龙刃堡附近区域。
+IF ~~ THEN REPLY @40 GOTO 0~~~~~
+			APPEND_FILE ~%MOD_FOLDER%/dlg/ADD2.d~
+		END
+		REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		 ~~~~~IF ~~ THEN REPLY @43 GOTO regiongo3	//去安姆附近区域。
+IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		APPEND_FILE ~%MOD_FOLDER%/dlg/ADD3.d~
+		PATCH_IF FILE_EXISTS_IN_GAME ~id2000.are~ THEN BEGIN
+			REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
+			 ~~~~~IF ~~ THEN REPLY @44 GOTO regiongo4	//第一次去的冰风谷附近区域。
+IF ~~ THEN REPLY @40 GOTO 0~~~~~
+			APPEND_FILE ~%MOD_FOLDER%/dlg/ADD4.d~
+		END
+		PATCH_IF FILE_EXISTS_IN_GAME ~IW2000.are~ THEN BEGIN
+			REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
+			 ~~~~~IF ~~ THEN REPLY @45 GOTO regiongo5	//第二次去的冰风谷附近区域。
+IF ~~ THEN REPLY @40 GOTO 0~~~~~
+			APPEND_FILE ~%MOD_FOLDER%/dlg/ADD5.d~
+		END
+		PATCH_IF FILE_EXISTS_IN_GAME ~NW2000.are~ THEN BEGIN
+			REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
+			 ~~~~~IF ~~ THEN REPLY @46 GOTO regiongo6	//去绝冬城附近区域。
+IF ~~ THEN REPLY @40 GOTO 0~~~~~
+			APPEND_FILE ~%MOD_FOLDER%/dlg/ADD6.d~
+		END
+		REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		 ~~~~~IF ~~ THEN REPLY @49 GOTO regiongo9	//去其它区域。
+IF ~~ THEN REPLY @40 GOTO 0~~~~~
+		APPEND_FILE ~%MOD_FOLDER%/dlg/ADD9.d~
+	END
+
+//dlg正式添加
+OUTER_SPRINT dlgname ~%wishdlg1%~
+COMPILE EVALUATE_BUFFER ~%MOD_FOLDER%/dlg/ADD0.d~
+ACTION_IF (~%wishdlg1%~ STRING_COMPARE_CASE ~%wishdlg2%~ != 0) & FILE_EXISTS_IN_GAME ~WISH02.cre~ BEGIN	//相等时STRING_COMPARE取0
+	OUTER_SPRINT dlgname ~%wishdlg2%~
+	COMPILE EVALUATE_BUFFER ~%MOD_FOLDER%/dlg/ADD0.d~
+END
