@@ -9,6 +9,7 @@ AUTO_TRA ~%MOD_FOLDER%/tra/%s~
 
 LANGUAGE  ~American English~	~english~	~RevisitOldHaunt/tra/english/game.tra~	~RevisitOldHaunt/tra/english/setup.tra~
 LANGUAGE  ~Simplified Chinese~	~schinese~	~RevisitOldHaunt/tra/schinese/game.tra~	~RevisitOldHaunt/tra/schinese/setup.tra~
+LANGUAGE  ~Francais~	~french~	~RevisitOldHaunt/tra/french/game.tra~	~RevisitOldHaunt/tra/french/setup.tra~
 
 BEGIN @1
 REQUIRE_PREDICATE GAME_IS ~bgee bg2ee eet~ @2	//°æ±¾²»¶Ô
