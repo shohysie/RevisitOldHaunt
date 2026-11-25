@@ -131,15 +131,15 @@ BUT_ONLY
 剑湾	BGXXXX（EET）		ARXXXX（龙矛，EE1）
 冰风谷1	idXXXX
 冰风谷2	IWXXXX
-绝冬城	NWXXXX
+无冬城	NWXXXX
 
 根据游戏判断大选项
 如果游戏是EE，剑湾1	如果有BDXXXX，+龙刃堡2
-如果游戏是EE2，安姆3	如果有NWXXXX，+绝冬城6
+如果游戏是EE2，安姆3	如果有NWXXXX，+无冬城6
 如果游戏是EET，剑湾+龙刃堡+安姆
 如果有idXXXX，+冰风谷一4
 如果有IWXXXX，+冰风谷二5
-如果有NWXXXX，+绝冬城6
+如果有NWXXXX，+无冬城6
 */
 //具体区域dlg处理
 ACTION_IF GAME_IS bgee THEN BEGIN
@@ -196,7 +196,7 @@ ACTION_IF GAME_IS bg2ee THEN BEGIN
 IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
 				END
 			END ELSE BEGIN
-				//绝冬城
+				//无冬城
 				PATCH_IF ((~%areacode%~ STRING_CONTAINS_REGEXP ~^NW[0-9]+~) == 0) BEGIN
 					//PATCH_PRINT ~NWN%areacode%~
 					INNER_ACTION BEGIN
@@ -270,7 +270,7 @@ IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
 IF ~~ THEN REPLY @14 GOTO regiongo0~~~~~ EVALUATE_BUFFER
 								END
 							END ELSE BEGIN
-								//绝冬城
+								//无冬城
 								PATCH_IF ((~%areacode%~ STRING_CONTAINS_REGEXP ~^NW[0-9]+~) == 0) BEGIN
 									INNER_ACTION BEGIN
 										COPY ~%MOD_FOLDER%/dlg/ADD6.d~ ~%MOD_FOLDER%/dlg/ADD6.d~
@@ -323,7 +323,7 @@ IF ~~ THEN REPLY @40 GOTO 0~~~~~
 		APPEND_FILE ~%MOD_FOLDER%/dlg/ADD3.d~
 		PATCH_IF FILE_EXISTS_IN_GAME ~NW2000.are~ THEN BEGIN
 			REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
-			 ~~~~~IF ~~ THEN REPLY @46 GOTO regiongo6	//去绝冬城附近区域。
+			 ~~~~~IF ~~ THEN REPLY @46 GOTO regiongo6	//去无冬城附近区域。
 IF ~~ THEN REPLY @40 GOTO 0~~~~~
 			APPEND_FILE ~%MOD_FOLDER%/dlg/ADD6.d~
 		END
@@ -362,7 +362,7 @@ IF ~~ THEN REPLY @40 GOTO 0~~~~~
 		END
 		PATCH_IF FILE_EXISTS_IN_GAME ~NW2000.are~ THEN BEGIN
 			REPLACE_TEXTUALLY ~~~~~IF ~~ THEN REPLY @40 GOTO 0~~~~~
-			 ~~~~~IF ~~ THEN REPLY @46 GOTO regiongo6	//去绝冬城附近区域。
+			 ~~~~~IF ~~ THEN REPLY @46 GOTO regiongo6	//去无冬城附近区域。
 IF ~~ THEN REPLY @40 GOTO 0~~~~~
 			APPEND_FILE ~%MOD_FOLDER%/dlg/ADD6.d~
 		END
